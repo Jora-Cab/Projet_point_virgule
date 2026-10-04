@@ -1,6 +1,6 @@
 ﻿Public Class CodeLine
     'Attibut de la classe CodeLine
-    Public ReadOnly NumeroLigne As Integer
+    Public ReadOnly Property NumeroLigne As Integer
     Public ReadOnly Contenu As String
     Public ReadOnly EstErreur As Boolean
     'Attirbut pour l'affichage
