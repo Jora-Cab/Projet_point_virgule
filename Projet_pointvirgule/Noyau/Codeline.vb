@@ -1,5 +1,5 @@
-﻿Public Class Codeline
-    'Attibut de la classe Codeline
+﻿Public Class CodeLine
+    'Attibut de la classe CodeLine
     Private Property NumeroLigne As Integer
     Private Property Contenu As String
     Private Property EstErreur As Boolean
