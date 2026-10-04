@@ -1,15 +1,17 @@
 ﻿Public Class CodeLine
     'Attibut de la classe CodeLine
-    Private Property NumeroLigne As Integer
-    Private Property Contenu As String
-    Private Property EstErreur As Boolean
+    Public ReadOnly NumeroLigne As Integer
+    Public ReadOnly Contenu As String
+    Public ReadOnly EstErreur As Boolean
     'Attirbut pour l'affichage
-    Private Property PositionX As Double
-    Private Property PositionY As Double
+    Public Property PositionX As Double
+    Public Property PositionY As Double
 
     'Constructeur et instanciation pour la Classe Codeline
-    Public Sub New()
-
+    Public Sub New(numeroligne As Integer, contenu As String, estErreur As Boolean)
+        Me.NumeroLigne = numeroligne
+        Me.Contenu = contenu
+        Me.EstErreur = estErreur
     End Sub
 
 
