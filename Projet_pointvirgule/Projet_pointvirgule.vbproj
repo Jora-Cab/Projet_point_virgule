@@ -73,6 +73,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Affichage\Bureau.vb" />
+    <Compile Include="Affichage\vuePiece.vb">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Noyau\CodeLine.vb" />
     <Compile Include="Form1.vb">
       <SubType>Form</SubType>

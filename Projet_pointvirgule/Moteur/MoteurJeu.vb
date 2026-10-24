@@ -26,7 +26,7 @@ Public Class MoteurJeu
     Public Event PartieTerminer(tempsEcoule As TimeSpan, nbTentatives As Integer)
 
     'Constructeur de la methode Moteur de jeu
-    Public Sub New(generateur As IGenerateurCode, bureau As Bureau, joueur As J)
+    Public Sub New(generateur As IGenerateurCode, bureau As Bureau, joueur As Joueur)
         If generateur Is Nothing Then
             Throw New ArgumentNullException("generateur")
         End If
