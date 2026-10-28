@@ -45,16 +45,49 @@ Public Class MoteurJeu
 
     'Methode de la classe moteur jeu pour demarrer une partie
     Public Sub DemarrerPartie()
-        'Etudiant 5 : Generer le contenu, placer l'erreur
+        'Remettre le compteur à zéro
+        _nbTentatives = 0
+
+        ' Réinitialiser le chronomètre
+        Chronometre.Reset()
+
+        ' TODO : générer le contenu du jeu 
+        ' et placer l'erreur avec _generateur et Bureau. 
+
+        ' Démarrer le chronomètre
+        Chronometre.Start()
         'Remise a zero des tentatives, demarrer le chronometre
-        Throw New NotImplementedException("A faire par l'etudiant 5")
+
     End Sub
 
     'Methode de la classe Verifier Victoire
     Public Function VerifierVictoire(ligne As CodeLine) As Boolean
-        'Etudiant 5 : compter la tentative, appeler joueur.inspecter
-        'arreter le chonometre, declencher PartieTerminee
-        Throw New NotImplementedException("A faire par l'etudiant 5")
+        ' Vérifier que la ligne existe
+        If ligne Is Nothing Then
+            Throw New ArgumentNullException(NameOf(ligne))
+        End If
+        ' Compter la tentative
+        _nbTentatives += 1
+        ' verifier si le joueur a touver la ligne fautive
+        Dim victoire As Boolean = joueur.Inspecter(ligne)
+
+        'si le joueur a trouve la bonne ligne
+        If victoire Then
+
+            'arreter le chronometre
+            Chronometre.Stop()
+
+            'declencher l'evenement de fin de partie
+            RaiseEvent PartieTerminer(
+                Chronometre.Elapsed,
+                _nbTentatives
+                )
+            Return True
+        End If
+
+        'si la ligne selectionnee n'est pas fautive
+        Return False
+
     End Function
 
 End Class
