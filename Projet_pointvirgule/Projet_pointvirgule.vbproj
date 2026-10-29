@@ -73,7 +73,10 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Affichage\Bureau.vb" />
-    <Compile Include="Noyau\Codeline.vb" />
+    <Compile Include="Affichage\vuePiece.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Noyau\CodeLine.vb" />
     <Compile Include="Form1.vb">
       <SubType>Form</SubType>
     </Compile>
@@ -100,6 +103,10 @@
       <DependentUpon>Settings.settings</DependentUpon>
       <DesignTimeSharedInput>True</DesignTimeSharedInput>
     </Compile>
+    <Compile Include="Noyau\Direction.vb" />
+    <Compile Include="Noyau\IGenerateurCode.vb" />
+    <Compile Include="Noyau\IRenduBureau.vb" />
+    <Compile Include="Noyau\Orientation.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Form1.resx">
