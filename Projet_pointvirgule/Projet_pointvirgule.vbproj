@@ -73,9 +73,15 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Affichage\Bureau.vb" />
+    <Compile Include="Affichage\VueJeu.vb">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Affichage\vuePiece.vb">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Generation\CodeJeu.vb" />
+    <Compile Include="Generation\SauvegardeCode.vb" />
+    <Compile Include="Noyau\Carte.vb" />
     <Compile Include="Noyau\CodeLine.vb" />
     <Compile Include="Form1.vb">
       <SubType>Form</SubType>
@@ -107,6 +113,8 @@
     <Compile Include="Noyau\IGenerateurCode.vb" />
     <Compile Include="Noyau\IRenduBureau.vb" />
     <Compile Include="Noyau\Orientation.vb" />
+    <Compile Include="Noyau\piece.vb" />
+    <Compile Include="Outils\GenerateurFactice.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Form1.resx">
