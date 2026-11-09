@@ -81,6 +81,7 @@
     </Compile>
     <Compile Include="Generation\CodeJeu.vb" />
     <Compile Include="Generation\SauvegardeCode.vb" />
+    <Compile Include="Interaction\VueLecture.vb" />
     <Compile Include="Noyau\Carte.vb" />
     <Compile Include="Noyau\CodeLine.vb" />
     <Compile Include="Form1.vb">
