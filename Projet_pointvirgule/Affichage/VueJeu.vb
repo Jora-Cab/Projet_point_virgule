@@ -1,4 +1,4 @@
-﻿Option Strict On
+Option Strict On
 Option Explicit On
 
 Imports System.Drawing
@@ -6,7 +6,9 @@ Imports System.Drawing.Drawing2D
 Imports System.Windows.Forms
 
 ''' <summary>
-''' Vue 3D a la premiere personne : feuilles de papier, loupe, bras du joueur, regard haut/bas.
+''' Vue 3D a la premiere personne : feuilles de papier, loupe avec zoom, bras du joueur,
+''' regard haut/bas, souris, et feuille en gros plan interactive.
+''' La boucle principale est dans MoteurJeu : il appelle Actualiser() a chaque tour.
 ''' </summary>
 Public Class VueJeu
     Inherits Control
@@ -22,9 +24,13 @@ Public Class VueJeu
     'La loupe ne marche que si le mur vise est a moins de cette distance (en cases)
     Private Const DistanceZoomMax As Double = 4.0
 
-    'Vitesse et amplitude du regard haut/bas
+    'Regard haut/bas au clavier
     Private Const VitesseInclinaison As Double = 0.03
     Private Const AmplitudeInclinaison As Double = 0.35
+
+    'Souris : sensibilite de la rotation (radians par pixel) et du regard haut/bas
+    Private Const SensibiliteHorizontale As Single = 0.0035F
+    Private Const SensibiliteVerticale As Double = 0.004
 
     'Nombre de feuilles cote a cote sur une face de mur
     Private Const FeuillesParFace As Integer = 6
@@ -40,17 +46,31 @@ Public Class VueJeu
         Public Face As Integer
     End Structure
 
-    'TEMPORAIRE : noms de fichiers affiches dans la bulle (la CodeLine n'a pas de nom de fichier)
+    'Noms de fichiers affiches dans la bulle (la CodeLine n'a pas de nom de fichier)
     Private ReadOnly _noms As String() = {
-        "export_biling_period", "vendor_shipment", "Invoice_Normalizer",
-        "Session_Client", "Inventory_Sync", "Audit_Queue",
-        "Contact_Processor", "Print_Spool"
+        "export_billing_period", "vendor_shipment", "invoice_normalizer",
+        "session_client", "inventory_sync", "audit_queue",
+        "contact_processor", "print_spool"
     }
 
     Private _carte As Carte
     Private _joueur As Joueur
     Private _bureau As Bureau
-    Private WithEvents _minuteur As New System.Windows.Forms.Timer()
+
+    'Reglages venant de Form1
+    Public Property Moteur As MoteurJeu
+    Public Property Zone As ZoneCode
+    Public Property SourisActive As Boolean = True
+
+    'Declenche quand le joueur veut lire la feuille en grand : nom du fichier et ligne de depart
+    Public Event FeuilleOuverte(nom As String, debut As Integer)
+
+    'Declenche quand le joueur clique sur une ligne de la feuille en gros plan
+    Public Event LigneCliquee(ligne As CodeLine)
+
+    Private _enPause As Boolean
+    Private _recentrer As Boolean = True
+    Private _derniereSeconde As Integer = -1
 
     'Zoom de la loupe : 0 = aucun, 1 = maximal
     Private _zoom As Double = 0.0
@@ -62,17 +82,18 @@ Public Class VueJeu
     Private _distanceMurVise As Double = 1.0E+30
     Private _distanceEnCours As Double
 
-    'Feuille visee par le centre de l'ecran
+    'Feuille visee par le centre de l'ecran (avec un court delai de grace pendant le zoom)
     Private _cibleValide As Boolean
-    Private _cibleNom As String
+    Private _cibleNom As String = ""
     Private _cibleDebut As Integer
+    Private _memoNom As String = ""
+    Private _memoDebut As Integer
+    Private _grace As Integer
 
     Public Sub New()
         Me.DoubleBuffered = True
         Me.ResizeRedraw = True
         Me.BackColor = Color.Black
-        _minuteur.Interval = 16
-        _minuteur.Start()
     End Sub
 
     Public Sub Configurer(carte As Carte, joueur As Joueur, bureau As Bureau)
@@ -83,24 +104,38 @@ Public Class VueJeu
         Invalidate()
     End Sub
 
-    Protected Overrides Sub Dispose(disposing As Boolean)
-        If disposing Then
-            _minuteur.Dispose()
-        End If
-        MyBase.Dispose(disposing)
-    End Sub
+    'Quand le jeu est en pause (page de lecture ouverte), la souris est liberee
+    Public Property EnPause As Boolean
+        Get
+            Return _enPause
+        End Get
+        Set(value As Boolean)
+            _enPause = value
+            If Not value Then
+                _recentrer = True
+            End If
+        End Set
+    End Property
 
+    'La feuille en gros plan est affichee (zoom a fond, feuille visee)
+    Private Function CarteVisible() As Boolean
+        Return _zoom > 0.85 AndAlso _cibleValide AndAlso Zone IsNot Nothing
+    End Function
+
+    'Touche enfoncee en ce moment ?
     Private Function Appuyee(touche As Keys) As Boolean
         Return GetAsyncKeyState(CInt(touche)) < 0
     End Function
 
-    'Toutes les 16 ms : clavier, deplacement, regard, zoom
-    Private Sub _minuteur_Tick(sender As Object, e As EventArgs) Handles _minuteur.Tick
-        If _joueur Is Nothing OrElse Form.ActiveForm IsNot Me.FindForm() Then
+    ''' <summary>Un tour de boucle : clavier, souris, regard, zoom. Appele par MoteurJeu.</summary>
+    Public Sub Actualiser()
+        If _joueur Is Nothing OrElse EnPause OrElse Form.ActiveForm IsNot Me.FindForm() Then
             Return
         End If
 
         Dim bouge As Boolean = False
+
+        'Deplacement au clavier (fleches ou Z Q S D)
         If Appuyee(Keys.Up) OrElse Appuyee(Keys.Z) Then
             _joueur.SeDeplacer(Direction.Haut)
             bouge = True
@@ -147,10 +182,110 @@ Public Class VueJeu
             bouge = True
         End If
 
+        'La souris tourne la tete, sauf pendant le zoom (le curseur sert alors a viser les lignes)
+        If MettreAJourSouris() Then
+            bouge = True
+        End If
+
+        'Le chrono est affiche : on redessine quand la seconde change
+        If Moteur IsNot Nothing Then
+            Dim seconde As Integer = CInt(Math.Floor(Moteur.Chronometre.Elapsed.TotalSeconds))
+            If seconde <> _derniereSeconde Then
+                _derniereSeconde = seconde
+                bouge = True
+            End If
+        End If
+
         If bouge Then
             Invalidate()
         End If
     End Sub
+
+    'Rotation a la souris : on mesure de combien le curseur s'est eloigne du centre, puis on le recentre
+    Private Function MettreAJourSouris() As Boolean
+        Dim sourisLibre As Boolean = (Not SourisActive) OrElse _zoom > 0.02
+
+        Dim voulu As System.Windows.Forms.Cursor = Cursors.No
+        If sourisLibre Then
+            voulu = Cursors.Default
+        End If
+        If Not Object.ReferenceEquals(Me.Cursor, voulu) Then
+            Me.Cursor = voulu
+        End If
+
+        If sourisLibre Then
+            _recentrer = True
+            Return False
+        End If
+
+        Dim centre As Point = Me.PointToScreen(New Point(Me.ClientSize.Width \ 2, Me.ClientSize.Height \ 2))
+        If _recentrer Then
+            System.Windows.Forms.Cursor.Position = centre
+            _recentrer = False
+            Return False
+        End If
+
+        Dim dx As Integer = System.Windows.Forms.Cursor.Position.X - centre.X
+        Dim dy As Integer = System.Windows.Forms.Cursor.Position.Y - centre.Y
+        If dx = 0 AndAlso dy = 0 Then
+            Return False
+        End If
+
+        _joueur.Tourner(dx * SensibiliteHorizontale)
+        _inclinaison = Math.Max(-1.0, Math.Min(1.0, _inclinaison - dy * SensibiliteVerticale))
+        System.Windows.Forms.Cursor.Position = centre
+        Return True
+    End Function
+
+    ''' <summary>Demande l'ouverture de la page de lecture sur la feuille visee (touche Entree).</summary>
+    Public Sub OuvrirFeuilleVisee()
+        If _cibleValide Then
+            RaiseEvent FeuilleOuverte(_cibleNom, _cibleDebut)
+        End If
+    End Sub
+
+#Region "Souris sur la feuille en gros plan"
+
+    Protected Overrides Sub OnMouseMove(e As MouseEventArgs)
+        MyBase.OnMouseMove(e)
+        If CarteVisible() Then
+            If Zone.Survoler(e.X, e.Y) Then
+                Invalidate()
+            End If
+        End If
+    End Sub
+
+    Protected Overrides Sub OnMouseDown(e As MouseEventArgs)
+        MyBase.OnMouseDown(e)
+        Me.Focus()
+        If e.Button <> MouseButtons.Left OrElse EnPause Then
+            Return
+        End If
+
+        If CarteVisible() Then
+            'Clic sur une ligne : inspection. Clic ailleurs sur la feuille : lecture en grand.
+            Dim ligne As CodeLine = Zone.ObtenirLigneALaPosition(e.X, e.Y)
+            If ligne IsNot Nothing Then
+                RaiseEvent LigneCliquee(ligne)
+                Invalidate()
+            ElseIf RectCarte().Contains(e.Location) Then
+                RaiseEvent FeuilleOuverte(_cibleNom, _cibleDebut)
+            End If
+        ElseIf _cibleValide Then
+            RaiseEvent FeuilleOuverte(_cibleNom, _cibleDebut)
+        End If
+    End Sub
+
+    Protected Overrides Sub OnMouseWheel(e As MouseEventArgs)
+        MyBase.OnMouseWheel(e)
+        If CarteVisible() Then
+            Zone.Defiler(-Math.Sign(e.Delta) * 3)
+            Zone.Survoler(e.X, e.Y)
+            Invalidate()
+        End If
+    End Sub
+
+#End Region
 
     Protected Overrides Sub OnPaint(e As PaintEventArgs)
         MyBase.OnPaint(e)
@@ -331,6 +466,23 @@ Public Class VueJeu
 
         'On retient la distance du mur vise pour decider si la loupe peut s'activer
         _distanceMurVise = _distanceEnCours
+
+        'Pendant le zoom, si le viseur effleure une marge entre deux feuilles, on garde la feuille precedente un instant
+        If _cibleValide Then
+            _memoNom = _cibleNom
+            _memoDebut = _cibleDebut
+            _grace = 20
+        ElseIf _grace > 0 AndAlso _zoom > 0.5 AndAlso _distanceMurVise <= DistanceZoomMax Then
+            _grace -= 1
+            _cibleValide = True
+            _cibleNom = _memoNom
+            _cibleDebut = _memoDebut
+        End If
+
+        'La zone de code se place sur la feuille visee
+        If _cibleValide AndAlso Zone IsNot Nothing Then
+            Zone.Ouvrir(_cibleDebut)
+        End If
     End Sub
 
     'Indique ou commence la lecture pour cette feuille (position dans la liste de toutes les lignes)
@@ -419,7 +571,7 @@ Public Class VueJeu
                        y0 <= centreEcran AndAlso centreEcran <= y1 Then
                         Dim code As Integer = Math.Abs(imp.CaseX * 31 + imp.CaseY * 17 + imp.Face * 5 + k * 3 + r)
                         _cibleValide = True
-                        _cibleNom = "lib/legacy/" & _noms(code Mod _noms.Length) & ".js"
+                        _cibleNom = "src/" & _noms(code Mod _noms.Length) & ".c"
                         _cibleDebut = DebutFeuille(imp, k, r)
                     End If
                 Next
@@ -428,11 +580,12 @@ Public Class VueJeu
         End Using
     End Sub
 
+#Region "Surcouche : bulle, loupe, bras, feuille en gros plan, chrono"
+
     Private Function Pt(w As Integer, h As Integer, fx As Double, fy As Double) As PointF
         Return New PointF(CSng(w * fx), CSng(h * fy))
     End Function
 
-    'Par-dessus la 3D : bulle, loupe, bras du joueur, et feuille au premier plan
     Private Sub DessinerSurcouche(g As Graphics, w As Integer, h As Integer)
         g.SmoothingMode = SmoothingMode.AntiAlias
 
@@ -446,7 +599,8 @@ Public Class VueJeu
             couleurCadre = Color.FromArgb(160, 160, 165)
         End If
 
-        If _cibleValide Then
+        'La bulle avec le nom du fichier vise
+        If _cibleValide AndAlso Not CarteVisible() Then
             Using police As New Font("Segoe UI", 9)
                 Dim taille As SizeF = g.MeasureString(_cibleNom, police)
                 Dim bx As Single = cx - taille.Width / 2.0F - 8
@@ -458,12 +612,14 @@ Public Class VueJeu
             End Using
         End If
 
+        'Le manche de la loupe
         Using stylo As New Pen(couleurCadre, Math.Max(6.0F, CSng(h * 0.018)))
             stylo.StartCap = LineCap.Round
             stylo.EndCap = LineCap.Round
             g.DrawLine(stylo, cx + rayon * 0.72F, cy + rayon * 0.72F, CSng(w * 0.66), CSng(h * 0.7))
         End Using
 
+        'Le bras : manche, poignet, main, index, pouce
         Using brosseManche As New SolidBrush(Color.FromArgb(70, 78, 104))
             g.FillPolygon(brosseManche, New PointF() {
                 Pt(w, h, 0.66, 1.0), Pt(w, h, 1.02, 1.0), Pt(w, h, 1.02, 0.8), Pt(w, h, 0.8, 0.78)})
@@ -487,6 +643,7 @@ Public Class VueJeu
                 Pt(w, h, 0.71, 0.62), Pt(w, h, 0.72, 0.68), Pt(w, h, 0.77, 0.74)})
         End Using
 
+        'La lentille de la loupe, qui sert aussi de viseur
         Using verre As New SolidBrush(Color.FromArgb(CInt(20 + 40 * _zoom), 255, 255, 255))
             g.FillEllipse(verre, cx - rayon, cy - rayon, rayon * 2, rayon * 2)
         End Using
@@ -495,54 +652,93 @@ Public Class VueJeu
         End Using
         g.FillEllipse(Brushes.DimGray, cx - 3, cy - 3, 6, 6)
 
-        If _zoom > 0.85 AndAlso _cibleValide Then
-            DessinerCarte(g, w, h)
+        'En zoom, la feuille visee apparait en grand au premier plan
+        If CarteVisible() Then
+            DessinerCarte(g)
         End If
+
+        DessinerInfos(g)
     End Sub
 
-    'La feuille au premier plan : les vraies lignes de code du bureau
-    Private Sub DessinerCarte(g As Graphics, w As Integer, h As Integer)
-        If _bureau Is Nothing Then
+    'Rectangle de la feuille en gros plan : proportionnel a la fenetre
+    Private Function RectCarte() As Rectangle
+        Dim w As Integer = Me.ClientSize.Width
+        Dim h As Integer = Me.ClientSize.Height
+        Dim cw As Integer = Math.Min(w - 20, Math.Max(300, CInt(w * 0.5)))
+        Dim ch As Integer = Math.Min(h - 20, Math.Max(200, CInt(h * 0.84)))
+        Return New Rectangle(CInt(w * 0.03), (h - ch) \ 2, cw, ch)
+    End Function
+
+    Private Function EnteteCarte() As Integer
+        Return Math.Max(34, CInt(RectCarte().Height * 0.08))
+    End Function
+
+    Private Function PiedCarte() As Integer
+        Return Math.Max(26, CInt(RectCarte().Height * 0.07))
+    End Function
+
+    'La partie de la feuille qui contient les lignes de code
+    Private Function RectLignesCarte() As Rectangle
+        Dim c As Rectangle = RectCarte()
+        Return New Rectangle(c.X + 6, c.Y + EnteteCarte(), c.Width - 12, c.Height - EnteteCarte() - PiedCarte())
+    End Function
+
+    'La feuille en gros plan : les vraies lignes de code, survol jaune, clic vert ou rouge
+    Private Sub DessinerCarte(g As Graphics)
+        Dim c As Rectangle = RectCarte()
+        Dim lignes As Rectangle = RectLignesCarte()
+        Dim entete As Integer = EnteteCarte()
+        Dim pied As Integer = PiedCarte()
+
+        Using ombre As New SolidBrush(Color.FromArgb(110, 0, 0, 0))
+            g.FillRectangle(ombre, c.X + 8, c.Y + 8, c.Width, c.Height)
+        End Using
+        Using papier As New SolidBrush(Color.FromArgb(250, 246, 232))
+            g.FillRectangle(papier, c)
+        End Using
+        g.DrawRectangle(Pens.Gray, c)
+
+        Using police As New Font("Segoe UI", Math.Max(12.0F, entete * 0.42F), FontStyle.Bold, GraphicsUnit.Pixel)
+            g.DrawString(_cibleNom, police, Brushes.DimGray, c.X + 10, c.Y + (entete - police.Height) / 2.0F)
+        End Using
+
+        Zone.Dessiner(g, lignes)
+
+        Dim texte As String = Zone.Message
+        Dim brosse As Brush = Brushes.Firebrick
+        If texte = "" Then
+            texte = "Survol : surligne   |   Clic : inspecter   |   Molette : défiler   |   Entrée : lire en grand"
+            brosse = Brushes.DimGray
+        ElseIf Zone.MessageReussite Then
+            brosse = Brushes.ForestGreen
+        End If
+
+        Using petite As New Font("Segoe UI", Math.Max(11.0F, pied * 0.42F), FontStyle.Regular, GraphicsUnit.Pixel)
+            g.SetClip(New Rectangle(c.X, lignes.Bottom, c.Width, pied))
+            g.DrawString(texte, petite, brosse, c.X + 10, lignes.Bottom + (pied - petite.Height) / 2.0F)
+            g.ResetClip()
+        End Using
+    End Sub
+
+    'Chrono et nombre d'essais, en haut a gauche
+    Private Sub DessinerInfos(g As Graphics)
+        If Moteur Is Nothing Then
             Return
         End If
 
-        Dim cw As Single = CSng(w * 0.46)
-        Dim ch As Single = CSng(h * 0.8)
-        Dim x0 As Single = CSng(w * 0.05)
-        Dim y0 As Single = CSng(h * 0.1)
+        Dim t As TimeSpan = Moteur.Chronometre.Elapsed
+        Dim texte As String = "Temps " & CInt(Math.Floor(t.TotalMinutes)).ToString("00") & ":" &
+                              t.Seconds.ToString("00") & "    Essais " & Moteur.NbTentatives.ToString()
 
-        Using ombre As New SolidBrush(Color.FromArgb(110, 0, 0, 0))
-            g.FillRectangle(ombre, x0 + 8, y0 + 8, cw, ch)
+        Using police As New Font("Segoe UI", 11, FontStyle.Bold)
+            Dim taille As SizeF = g.MeasureString(texte, police)
+            Using fond As New SolidBrush(Color.FromArgb(150, 0, 0, 0))
+                g.FillRectangle(fond, Me.ClientSize.Width - taille.Width - 26, 10, taille.Width + 16, taille.Height + 6)
+            End Using
+            g.DrawString(texte, police, Brushes.White, Me.ClientSize.Width - taille.Width - 18, 13)
         End Using
-        Using papier As New SolidBrush(Color.FromArgb(250, 246, 232))
-            g.FillRectangle(papier, x0, y0, cw, ch)
-        End Using
-        g.DrawRectangle(Pens.Gray, x0, y0, cw, ch)
-
-        'Le texte ne doit pas depasser de la feuille
-        g.SetClip(New RectangleF(x0, y0, cw, ch))
-
-        Using police As New Font("Consolas", 8)
-            g.DrawString(_cibleNom, police, Brushes.DimGray, x0 + 10, y0 + 8)
-
-            Dim total As Integer = _bureau.NombreLignes
-            Dim nbLignes As Integer = 18
-            Dim pas As Single = (ch - 60) / nbLignes
-
-            For i As Integer = 0 To nbLignes - 1
-                Dim index As Integer = _cibleDebut + i
-                If index >= total Then
-                    Exit For
-                End If
-
-                Dim ligne As CodeLine = _bureau.ObtenirLigne(index)
-                Dim yy As Single = y0 + 34 + i * pas
-                g.DrawString(ligne.NumeroLigne.ToString(), police, Brushes.Gray, x0 + 10, yy)
-                g.DrawString(ligne.Contenu, police, Brushes.Black, x0 + 64, yy)
-            Next
-        End Using
-
-        g.ResetClip()
     End Sub
+
+#End Region
 
 End Class

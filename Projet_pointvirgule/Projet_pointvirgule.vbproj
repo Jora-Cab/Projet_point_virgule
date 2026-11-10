@@ -73,15 +73,26 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Affichage\Bureau.vb" />
+    <Compile Include="Affichage\Mur.vb" />
     <Compile Include="Affichage\VueJeu.vb">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="Affichage\VueLecture.vb">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Affichage\ZoneCode.vb" />
+    <Compile Include="GestionnaireSon.vb" />
     <Compile Include="Affichage\vuePiece.vb">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="FormJeu.Designer.vb">
+      <DependentUpon>FormJeu.vb</DependentUpon>
+    </Compile>
+    <Compile Include="FormJeu.vb" />
     <Compile Include="Generation\CodeJeu.vb" />
     <Compile Include="Generation\SauvegardeCode.vb" />
-    <Compile Include="Interaction\VueLecture.vb" />
+    <Compile Include="Interaction\GestionSons.vb" />
+    <Compile Include="Interaction\RetourSensoriel.vb" />
     <Compile Include="Noyau\Carte.vb" />
     <Compile Include="Noyau\CodeLine.vb" />
     <Compile Include="Form1.vb">
@@ -94,7 +105,6 @@
     <Compile Include="Generation\GenerateurCode.vb" />
     <Compile Include="Interaction\Joueur.vb" />
     <Compile Include="Moteur\MoteurJeu.vb" />
-    <Compile Include="Affichage\Mur.vb" />
     <Compile Include="My Project\AssemblyInfo.vb" />
     <Compile Include="My Project\Application.Designer.vb">
       <AutoGen>True</AutoGen>
@@ -116,16 +126,27 @@
     <Compile Include="Noyau\Orientation.vb" />
     <Compile Include="Noyau\piece.vb" />
     <Compile Include="Outils\GenerateurFactice.vb" />
+    <Compile Include="test\FormTests.vb">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="test\ResultatTest.vb" />
+    <Compile Include="test\TestsEtudiant5.vb" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="Form1.resx">
       <DependentUpon>Form1.vb</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="FormJeu.resx">
+      <DependentUpon>FormJeu.vb</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="My Project\Resources.resx">
       <Generator>VbMyResourcesResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.vb</LastGenOutput>
       <CustomToolNamespace>My.Resources</CustomToolNamespace>
       <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="test\FormTests.resx">
+      <DependentUpon>FormTests.vb</DependentUpon>
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
@@ -141,6 +162,11 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup />
+  <ItemGroup>
+    <Content Include="docs\apercu_sons\erreur.wav" />
+    <Content Include="docs\apercu_sons\fond.wav" />
+    <Content Include="docs\apercu_sons\succes.wav" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.VisualBasic.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
        Other similar extension points exist, see Microsoft.Common.targets.
